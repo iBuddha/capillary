@@ -1,3 +1,5 @@
+import play.PlayScala
+
 name := """capillary"""
 
 version := "1.2"

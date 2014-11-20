@@ -46,10 +46,13 @@ object ZkKafka {
   def getSpoutTopology(root: String): Topology = {
     // Fetch the spout root
     val s = zkClient.getChildren.forPath(makePath(applyBase(Seq(stormZkRoot, Some(root)))))
-    // Fetch the partitions so we can pick the first one
-    val parts = zkClient.getChildren.forPath(makePath(applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(s.get(0)))))
-    // Use the first partition's data to build up info about the topology
-    val jsonState = new String(zkClient.getData.forPath(makePath(applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(s.get(0))) ++ Seq(Some(parts.get(0))))))
+//    val pathToPartitions = applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(s.get(0)))
+//    // Fetch the partitions so we can pick the first one
+//    val parts = zkClient.getChildren.forPath(makePath(pathToPartitions))
+//    // Use the first partition's data to build up info about the topology
+    val pathToData = makePath(applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(s.get(0))))
+//    val pathToData = applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(s.get(0))) ++ Seq(Some(parts.get(0)))
+    val jsonState = new String(zkClient.getData.forPath(pathToData))
     val state = Json.parse(jsonState)
     val topic = (state \ "topic").as[String]
     val name = (state \ "topology" \ "name").as[String]
@@ -60,8 +63,9 @@ object ZkKafka {
     // There is basically nothing for error checking in here.
     val s = zkClient.getChildren.forPath(makePath(applyBase(Seq(stormZkRoot, Some(root)))))
     s.asScala.map({ pts =>
-      val parts = zkClient.getChildren.forPath(makePath(applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(pts))))
-      val jsonState = zkClient.getData.forPath(makePath(applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(pts)) ++ Seq(Some(parts.get(0)))))
+//      val parts = zkClient.getChildren.forPath(makePath(applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(pts))))
+      val pathToData = makePath(applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(pts)))
+      val jsonState = zkClient.getData.forPath(pathToData)
       val state = Json.parse(jsonState)
       val offset = (state \ "offset").as[Long]
       val partition = (state \ "partition").as[Long]
