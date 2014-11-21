@@ -29,6 +29,8 @@ object ZkKafka {
   val zkClient = CuratorFrameworkFactory.newClient(zookeepers, retryPolicy);
   zkClient.start();
 
+  var _topics: Option[Map[String, TopicInfo]] = None //cache topic information
+
   def makePath(parts: Seq[Option[String]]): String = {
     parts.foldLeft("")({ (path, maybeP) => maybeP.map({ p => path + "/" + p }).getOrElse(path) }).replace("//","/")
   }
@@ -142,10 +144,28 @@ object ZkKafka {
         partitions = PartitionInfo(partNum, offset) :: partitions
         total = total + offset
       }}
-      topics = TopicInfo(topic, partitions, total) :: topics
+      topics = TopicInfo(topic, partitions, total, false) :: topics
     }
-    topics
+    //now topics has got all information of current topics. Begin to config if a topic is active
+    var topicStates = List.empty[TopicInfo] //用于保存经过此次处理后得到的topic的信息。用于返回给view
+    topics foreach { topic =>
+      var topicState = topic
+      _topics foreach { cachedTopics =>
+        val cachedTopic = cachedTopics.getOrElse(topic.topicName,topic)
+        if(cachedTopic.total != topic.total){
+          topicState = TopicInfo(topic.topicName, topic.partitions, topic.total, true)
+        }
+      }
+      topicStates = topicState :: topicStates
+    }
+    var cachedTopicInfo = Map.empty[String, TopicInfo]
+    topicStates.foreach { topicInfo =>
+      cachedTopicInfo += (topicInfo.topicName -> topicInfo)
+    }
+    _topics = Some(cachedTopicInfo)
+    topicStates
   }
 }
-case class TopicInfo(topic: String, partitions: List[PartitionInfo], total: Long)
+case class TopicInfo(topicName: String, partitions: List[PartitionInfo], total: Long,
+                      isActive: Boolean)
 case class PartitionInfo(partition: Int, offset: Long)

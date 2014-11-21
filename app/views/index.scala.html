@@ -11,7 +11,11 @@
 <h1>Topics</h1>
 <ul>
     @for(topic <- topicInfo) {
-    <li>@topic.topic <br/>条数:@topic.total</li>
+        @if(topic.isActive){
+        <li>@topic.topicName <br/>条数:<font color="red">@topic.total</font></li>
+        }else{
+            <li>@topic.topicName <br/>条数:@topic.total</li>
+        }
     }
 </ul>
 }
