@@ -44,14 +44,13 @@ object Application extends Controller {
     val topos = ZkKafka.getTopologies
 
     var topics = ZkKafka.listTopics
-//    topics = topics.sortBy(_.topicName)
     topics = topics.sortWith{
       case (topicA, topicB) => {
       var result = false
         if(topicA.isActive != topicB.isActive)
           result = topicA.isActive > topicB.isActive
         else if(topicA.topicName != topicB.topicName)
-          result = topicA.topicName > topicB.topicName
+          result = topicA.topicName < topicB.topicName
       result
       }
     }

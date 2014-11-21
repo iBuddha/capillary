@@ -12,10 +12,21 @@
 <ul>
     @for(topic <- topicInfo) {
         @if(topic.isActive){
-        <li>@topic.topicName <br/>条数:<font color="red">@topic.total</font></li>
+        <li><font size="5">@topic.topicName></font>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="red" size="5">条数:@topic.total &nbsp;增长了: @topic.increment</font></li>
+        <ul>
+            @for(partitionInfo <- topic.partitions){
+            <li><font color="green">Partition @partitionInfo.partition :&nbsp;&nbsp; @partitionInfo.offset ,&nbsp;增长了: @partitionInfo.increment</font> </li>
+            }
+        </ul>
         }else{
-            <li>@topic.topicName <br/>条数:@topic.total</li>
+            <li><font size="5">@topic.topicName</font> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font size="5">条数:@topic.total</font></li>
+            <ul>
+                @for(partitionInfo <- topic.partitions){
+                <li><font color="green">Partition @partitionInfo.partition :&nbsp;&nbsp; @partitionInfo.offset</font> </li>
+                }
+            </ul>
         }
+        </br>
     }
 </ul>
 }

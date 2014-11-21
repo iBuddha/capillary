@@ -134,6 +134,7 @@ object ZkKafka {
     while(iter.hasNext)
       topicList = iter.next() :: topicList
     var topics = List.empty[TopicInfo]
+    val currentTime: Long = System.currentTimeMillis()
     topicList.foreach{ topic: String =>
       val partOffset = getKafkaState(topic)
       var partitions= List.empty[PartitionInfo]
@@ -141,19 +142,33 @@ object ZkKafka {
       partOffset.foreach{ e:(Int, Long) =>{
         val partNum = e._1
         val offset = e._2
-        partitions = PartitionInfo(partNum, offset) :: partitions
+        partitions = PartitionInfo(partNum, offset, Increment(0, 0)) :: partitions
         total = total + offset
       }}
-      topics = TopicInfo(topic, partitions, total, false) :: topics
+      partitions = partitions.sortBy(_.partition)
+      topics = TopicInfo(currentTime, topic, partitions, total, Increment(0, 0), false) :: topics
     }
     //now topics has got all information of current topics. Begin to config if a topic is active
     var topicStates = List.empty[TopicInfo] //用于保存经过此次处理后得到的topic的信息。用于返回给view
     topics foreach { topic =>
-      var topicState = topic
+      var topicState: TopicInfo = topic
       _topics foreach { cachedTopics =>
-        val cachedTopic = cachedTopics.getOrElse(topic.topicName,topic)
+        val cachedTopic = cachedTopics.getOrElse(topic.topicName, topic)
         if(cachedTopic.total != topic.total){
-          topicState = TopicInfo(topic.topicName, topic.partitions, topic.total, true)
+          val interval: Int = ((topic.timestamp - cachedTopic.timestamp) / 1000).toInt
+          var partitionStates = List.empty[PartitionInfo] //计算现在的partition每个的offset增长了多少
+          topic.partitions.zipWithIndex.foreach{
+            case (currentPartState, index) => {
+              partitionStates = PartitionInfo(currentPartState.partition, currentPartState.offset,
+                Increment(interval,
+                  (currentPartState.offset - cachedTopic.partitions(index).offset).toInt
+                )
+              ) :: partitionStates
+            }
+          }
+          partitionStates = partitionStates.sortBy(_.partition)
+          topicState = TopicInfo(currentTime, topic.topicName, partitionStates
+            , topic.total, Increment(interval, (topic.total - cachedTopic.total).toInt), true)
         }
       }
       topicStates = topicState :: topicStates
@@ -166,6 +181,17 @@ object ZkKafka {
     topicStates
   }
 }
-case class TopicInfo(topicName: String, partitions: List[PartitionInfo], total: Long,
-                      isActive: Boolean)
-case class PartitionInfo(partition: Int, offset: Long)
+case class TopicInfo(timestamp: Long, topicName: String, partitions: List[PartitionInfo]
+                     , total: Long, increment: Increment, isActive: Boolean)
+case class PartitionInfo(partition: Int, offset: Long, increment: Increment)
+
+/**
+ *
+ * @param interval 时间间隔，以秒为单位
+ * @param inc offset的变化值
+ */
+case class Increment(interval: Int, inc: Int){
+  override def toString():String = {
+     inc + " / " + interval + "s"
+  }
+}
