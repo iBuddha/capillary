@@ -126,4 +126,26 @@ object ZkKafka {
 
     (total, deltas)
   }
+  def listTopics : List[TopicInfo] = {
+    val iter = zkClient.getChildren.forPath("/brokers/topics").iterator()
+    var topicList = List.empty[String]
+    while(iter.hasNext)
+      topicList = iter.next() :: topicList
+    var topics = List.empty[TopicInfo]
+    topicList.foreach{ topic: String =>
+      val partOffset = getKafkaState(topic)
+      var partitions= List.empty[PartitionInfo]
+      var total = 0L
+      partOffset.foreach{ e:(Int, Long) =>{
+        val partNum = e._1
+        val offset = e._2
+        partitions = PartitionInfo(partNum, offset) :: partitions
+        total = total + offset
+      }}
+      topics = TopicInfo(topic, partitions, total) :: topics
+    }
+    topics
+  }
 }
+case class TopicInfo(topic: String, partitions: List[PartitionInfo], total: Long)
+case class PartitionInfo(partition: Int, offset: Long)

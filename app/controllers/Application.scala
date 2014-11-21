@@ -43,7 +43,10 @@ object Application extends Controller {
 
     val topos = ZkKafka.getTopologies
 
-    Ok(views.html.index(topos))
+    var topics = ZkKafka.listTopics
+    topics = topics.sortBy(_.topic)
+
+    Ok(views.html.index(topos, topics))
   }
 
   def topo(name: String, topoRoot: String, topic: String) = Action { implicit request =>
