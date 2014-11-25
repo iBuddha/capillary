@@ -18,6 +18,7 @@ object KafkaApi {
   val retryPolicy = new ExponentialBackoffRetry(1000, 3)
   val zkClient = CuratorFrameworkFactory.newClient(zookeepers, retryPolicy);
   zkClient.start();
+  val consumers:scala.collection.mutable.Map[String, SimpleConsumer] = scala.collection.mutable.Map.empty[String, SimpleConsumer]
 
   def makePath(parts: Seq[Option[String]]): String = {
     parts.foldLeft("")({ (path, maybeP) => maybeP.map({ p => path + "/" + p }).getOrElse(path) }).replace("//","/")
@@ -39,7 +40,11 @@ object KafkaApi {
       val port = (leaderState \ "port").as[Int]
 
       // Talk to the lead broker and get offset data!
-      val ks = new SimpleConsumer(host, port, 1000000, 64 * 1024, "capillary")
+//      val ks = new SimpleConsumer(host, port, 1000000, 64 * 1024, "capillary")
+      if(!consumers.contains(host)){
+        consumers.put(host, new SimpleConsumer(host, port, 1000000, 64 * 1024, "capillary"))
+      }
+      val ks = consumers.get(host).get
       val topicAndPartition = TopicAndPartition(topic, kp.toInt)
       val requestInfo = Map[TopicAndPartition, PartitionOffsetRequestInfo](
         topicAndPartition -> new PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)
