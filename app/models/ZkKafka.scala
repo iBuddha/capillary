@@ -28,7 +28,6 @@ object ZkKafka {
   val retryPolicy = new ExponentialBackoffRetry(1000, 3)
   val zkClient = CuratorFrameworkFactory.newClient(zookeepers, retryPolicy);
   zkClient.start();
-
   var _topics: Option[Map[String, TopicInfo]] = None //cache topic information
 
   def makePath(parts: Seq[Option[String]]): String = {
@@ -48,12 +47,8 @@ object ZkKafka {
   def getSpoutTopology(root: String): Topology = {
     // Fetch the spout root
     val s = zkClient.getChildren.forPath(makePath(applyBase(Seq(stormZkRoot, Some(root)))))
-//    val pathToPartitions = applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(s.get(0)))
-//    // Fetch the partitions so we can pick the first one
-//    val parts = zkClient.getChildren.forPath(makePath(pathToPartitions))
 //    // Use the first partition's data to build up info about the topology
     val pathToData = makePath(applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(s.get(0))))
-//    val pathToData = applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(s.get(0))) ++ Seq(Some(parts.get(0)))
     val jsonState = new String(zkClient.getData.forPath(pathToData))
     val state = Json.parse(jsonState)
     val topic = (state \ "topic").as[String]
@@ -65,7 +60,6 @@ object ZkKafka {
     // There is basically nothing for error checking in here.
     val s = zkClient.getChildren.forPath(makePath(applyBase(Seq(stormZkRoot, Some(root)))))
     s.asScala.map({ pts =>
-//      val parts = zkClient.getChildren.forPath(makePath(applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(pts))))
       val pathToData = makePath(applyBase(Seq(stormZkRoot, Some(root))) ++ Seq(Some(pts)))
       val jsonState = zkClient.getData.forPath(pathToData)
       val state = Json.parse(jsonState)
@@ -76,36 +70,10 @@ object ZkKafka {
   }
 
   def getKafkaState(topic: String): Map[Int, Long] = {
-    // Fetch info for each partition, given the topic
-    val kParts = zkClient.getChildren.forPath(makePath(Seq(kafkaZkRoot, Some("brokers/topics"), Some(topic), Some("partitions"))))
-    // For each partition fetch the JSON state data to find the leader for each partition
-    kParts.asScala.map({ kp =>
-      val jsonState = zkClient.getData.forPath(makePath(Seq(kafkaZkRoot, Some("brokers/topics"), Some(topic), Some("partitions"), Some(kp), Some("state"))))
-      val state = Json.parse(jsonState)
-      val leader = (state \ "leader").as[Long]
-
-      // Knowing the leader's ID, fetch info about that host so we can contact it.
-      val idJson = zkClient.getData.forPath(makePath(Seq(kafkaZkRoot, Some("brokers/ids"), Some(leader.toString))))
-      val leaderState = Json.parse(idJson)
-      val host = (leaderState \ "host").as[String]
-      val port = (leaderState \ "port").as[Int]
-
-      // Talk to the lead broker and get offset data!
-      val ks = new SimpleConsumer(host, port, 1000000, 64*1024, "capillary")
-      val topicAndPartition = TopicAndPartition(topic, kp.toInt)
-      val requestInfo = Map[TopicAndPartition, PartitionOffsetRequestInfo](
-        topicAndPartition -> new PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)
-      )
-      val request = new OffsetRequest(
-        requestInfo = requestInfo, versionId = OffsetRequest.CurrentVersion, clientId = "capillary")
-      val response = ks.getOffsetsBefore(request);
-      if(response.hasError) {
-        println("ERROR!")
-      }
-      val offset = response.partitionErrorAndOffsets.get(topicAndPartition).get.offsets(0)
-      ks.close
-      (kp.toInt, offset)
-    }).toMap
+   utils.KafkaApi.getKafkaState(topic)
+  }
+  def getKafkaState(topics: List[String]): List[(String, Map[Int, Long])] = {
+    utils.KafkaApi.getKafkaState(topics)
   }
 
   def getTopologyDeltas(topoRoot: String, topic: String): Tuple2[Long, List[Delta]] = {
@@ -128,6 +96,11 @@ object ZkKafka {
 
     (total, deltas)
   }
+
+  /**
+   * get all topics's info from zookeeper
+   * @return
+   */
   def listTopics : List[TopicInfo] = {
     val iter = zkClient.getChildren.forPath("/brokers/topics").iterator()
     var topicList = List.empty[String]
@@ -135,19 +108,23 @@ object ZkKafka {
       topicList = iter.next() :: topicList
     var topics = List.empty[TopicInfo]
     val currentTime: Long = System.currentTimeMillis()
-    topicList.foreach{ topic: String =>
-      val partOffset = getKafkaState(topic)
-      var partitions= List.empty[PartitionInfo]
-      var total = 0L
-      partOffset.foreach{ e:(Int, Long) =>{
-        val partNum = e._1
-        val offset = e._2
-        partitions = PartitionInfo(partNum, offset, Increment(0, 0)) :: partitions
-        total = total + offset
-      }}
-      partitions = partitions.sortBy(_.partition)
-      topics = TopicInfo(currentTime, topic, partitions, total, Increment(0, 0), false) :: topics
+    //get offsets for each topic
+    val kafkaStates = getKafkaState(topicList) // store topic states
+    kafkaStates.foreach{
+      case (topic, partitionInfo) => {
+        var partitions= List.empty[PartitionInfo]
+              var total = 0L
+              partitionInfo.foreach{ e:(Int, Long) =>{
+                val partNum = e._1
+                val offset = e._2
+                partitions = PartitionInfo(partNum, offset, Increment(0, 0)) :: partitions
+                total = total + offset
+              }}
+              partitions = partitions.sortBy(_.partition)
+        topics = TopicInfo(currentTime, topic, partitions, total, Increment(0, 0), false) :: topics
+      }
     }
+
     //now topics has got all information of current topics. Begin to config if a topic is active
     var topicStates = List.empty[TopicInfo] //用于保存经过此次处理后得到的topic的信息。用于返回给view
     topics foreach { topic =>
