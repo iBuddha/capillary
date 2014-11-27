@@ -11,6 +11,9 @@ Capillary does the following:
 * Fetches information about the topic's partitions and offsets from the Storm spout state in Zookeeper
 * Fetches information about the partition's leaders from Zookeeper
 * Fetches information from Kafka about the latest offset from the partitions leaders
+* Fetches all topics of kafka cluster
+* Fetches offset, ISR, replicas, leader, offset increment for each partition exists in Kafka
+* Fetches partition leader distribution of Kafka cluster
 
 # API
 
