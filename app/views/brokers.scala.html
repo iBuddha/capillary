@@ -1,4 +1,4 @@
-@(brokers: Map[utils.KafkaBroker, Set[utils.PartitionInfo]])(implicit request: play.api.mvc.RequestHeader)
+@(brokers: Map[utils.KafkaBroker, List[utils.PartitionInfo]])(implicit request: play.api.mvc.RequestHeader)
 
 @main("Capillary") {
 

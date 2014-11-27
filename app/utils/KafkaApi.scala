@@ -66,7 +66,7 @@ object KafkaApi {
       } else
       //        (kp.toInt, -1L, "-1")
         PartitionInfo(topic, kp.toInt, -1L, "-1", replicas.get(kp.toInt).get.replicas, List.empty[String], NoIncrement)
-    }).toList
+    }).toList.sortBy(_.id)
     val totalOffset = partitionInfos.map(_.offset).sum
     TopicInfo(System.currentTimeMillis(), topic, partitionInfos, totalOffset, NoIncrement, false)
   }
@@ -124,14 +124,15 @@ object KafkaApi {
 
   /**
    * get partition leader distribution for this Kafka cluster
+   * get all partitions of a topic into a List instead of a Set, so we can sort it.
    * @param topicInfos
    */
-  def getPartitionDistribution(topicInfos: List[TopicInfo]): Map[KafkaBroker, Set[PartitionInfo]] = {
+  def getPartitionDistribution(topicInfos: List[TopicInfo]): Map[KafkaBroker, List[PartitionInfo]] = {
     val brokers = getBrokers()
     val partitions = topicInfos.flatten(_.partitions)
     val distribution: Map[String, List[PartitionInfo]] = partitions.groupBy(_.leader)
     brokers.map{broker =>
-      (broker, distribution.get(broker.host).getOrElse(List.empty[PartitionInfo]).toSet)
+      (broker, distribution.get(broker.host).getOrElse(List.empty[PartitionInfo]).toList.sortBy(_.topicName))
     }.toMap
   }
 }
