@@ -25,6 +25,7 @@
             <div class="collapse navbar-collapse">
               <ul class="nav navbar-nav">
                 <li @if(request.path.equals("/")) { class="active" }><a href="@routes.Application.index()">Home</a></li>
+                <li @if(request.path.equals("/")) { class="active" }><a href="@routes.Application.brokers()">Brokers</a></li>
                 <li><a href="http://github.com/keenlabs/capillary">About</a></li>
               </ul>
             </div>

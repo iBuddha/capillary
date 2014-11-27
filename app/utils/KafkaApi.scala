@@ -9,7 +9,6 @@ import play.api.Play
 import play.api.Play.current
 import play.api.libs.json.{JsObject, JsNumber, JsArray, Json}
 import scala.collection.JavaConverters._
-import scala.util.parsing.json.JSONObject
 
 /**
  * Created by xhuang on 11/25/14.
@@ -63,10 +62,10 @@ object KafkaApi {
         val offset = response.partitionErrorAndOffsets.get(topicAndPartition).get.offsets(0)
         ks.close
         //        (kp.toInt, offset, host)
-        PartitionInfo(kp.toInt, offset, host, replicas.get(kp.toInt).get.replicas, isr, NoIncrement)
+        PartitionInfo(topic, kp.toInt, offset, host, replicas.get(kp.toInt).get.replicas, isr, NoIncrement)
       } else
       //        (kp.toInt, -1L, "-1")
-        PartitionInfo(kp.toInt, -1L, "-1",replicas.get(kp.toInt).get.replicas, List.empty[String], NoIncrement)
+        PartitionInfo(topic, kp.toInt, -1L, "-1", replicas.get(kp.toInt).get.replicas, List.empty[String], NoIncrement)
     }).toList
     val totalOffset = partitionInfos.map(_.offset).sum
     TopicInfo(System.currentTimeMillis(), topic, partitionInfos, totalOffset, NoIncrement, false)
@@ -102,12 +101,47 @@ object KafkaApi {
     println(replicas)
     replicas
   }
+
+  /**
+   * get ids of all Kafka brokers
+   * 获取Kafka集群的所有broker信息
+   * @return
+   */
+  def getBrokers(): Set[KafkaBroker] = {
+    val idsPath = makePath(Seq(kafkaZkRoot, Some("brokers/ids")))
+    val ids = zkClient.getChildren.forPath(idsPath)
+    ids.asScala.map { id =>
+      val brokerInfo = zkClient.getData.forPath(makePath(Seq(kafkaZkRoot, Some("brokers/ids"), Some(id))))
+      val brokerJson = Json.parse(brokerInfo)
+      val host = (brokerJson \ "host").as[String]
+      val port = (brokerJson \ "port").as[Int]
+      val jmxPort = (brokerJson \ "jmx_port").as[Int]
+      val timestamp = (brokerJson \ "timestamp").as[String]
+      val version = (brokerJson \ "version").as[Int]
+      KafkaBroker(id.toInt, jmxPort, timestamp, version, host, port)
+    }.toSet
+  }
+
+  /**
+   * get partition leader distribution for this Kafka cluster
+   * @param topicInfos
+   */
+  def getPartitionDistribution(topicInfos: List[TopicInfo]): Map[KafkaBroker, Set[PartitionInfo]] = {
+    val brokers = getBrokers()
+    val partitions = topicInfos.flatten(_.partitions)
+    val distribution: Map[String, List[PartitionInfo]] = partitions.groupBy(_.leader)
+    brokers.map{broker =>
+      (broker, distribution.get(broker.host).getOrElse(List.empty[PartitionInfo]).toSet)
+    }.toMap
+  }
 }
+
+case class KafkaBroker(id: Int, jmxPort: Int, timestamp: String, version: Int, host: String, port: Int)
 
 case class TopicInfo(timestamp: Long, topicName: String, partitions: List[PartitionInfo]
                      , total: Long, increment: Increment, isActive: Boolean)
 
-case class PartitionInfo(partition: Int, offset: Long, leader: String
+case class PartitionInfo(topicName: String, id: Int, offset: Long, leader: String
                          , reps: List[Int]
                          , isr: List[String]
                          , increment: Increment)

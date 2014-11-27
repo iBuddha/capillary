@@ -12,6 +12,7 @@ import models.ZkKafka._
 import play.api.Play.current
 import play.api._
 import play.api.mvc._
+import utils.KafkaApi
 import scala.language.implicitConversions
 
 object Application extends Controller {
@@ -56,6 +57,12 @@ object Application extends Controller {
     }
 
     Ok(views.html.index(topos, topics))
+  }
+
+  def brokers = Action { implicit requst =>
+    val topics = ZkKafka.listTopics
+    val brokers = KafkaApi.getPartitionDistribution(topics)
+    Ok(views.html.brokers(brokers))
   }
 
   def topo(name: String, topoRoot: String, topic: String) = Action { implicit request =>

@@ -84,7 +84,7 @@ object ZkKafka {
 
     var total = 0L;
     val deltas = zkState.map({ partitionInfo =>
-      val partition = partitionInfo.partition
+      val partition = partitionInfo.id
       val koffset = partitionInfo.offset
       stormState.get(partition) map { soffset =>
         val amount = koffset - soffset
@@ -131,14 +131,14 @@ object ZkKafka {
           //              ) :: partitionStates
           //            }
           //          }
-          val cachedPartitionInfos = cachedTopic.partitions.map{p => (p.partition, p)}.toMap
+          val cachedPartitionInfos = cachedTopic.partitions.map{p => (p.id, p)}.toMap
           topicInfo.partitions.foreach{partition =>
-            val id = partition.partition
+            val id = partition.id
             val cachedPartition = cachedPartitionInfos.getOrElse(id, partition) //if this partition didn't exists, return its current state
-            partitionStates = PartitionInfo(id, partition.offset
+            partitionStates = PartitionInfo(topicInfo.topicName, id, partition.offset
             ,partition.leader, partition.reps, partition.isr, Increment(interval, (partition.offset - cachedPartition.offset).toInt)) :: partitionStates
           }
-          partitionStates = partitionStates.sortBy(_.partition)
+          partitionStates = partitionStates.sortBy(_.id)
           topicState = TopicInfo(currentTime, topicInfo.topicName, partitionStates
             , topicInfo.total, Increment(interval, topicInfo.total - cachedTopic.total), true)
         }

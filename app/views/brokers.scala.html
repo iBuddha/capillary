@@ -1,0 +1,16 @@
+@(brokers: Map[utils.KafkaBroker, Set[utils.PartitionInfo]])(implicit request: play.api.mvc.RequestHeader)
+
+@main("Capillary") {
+
+<h1>Brokers</h1>
+<ul>
+    @for(broker <- brokers) {
+    <li><font color="blue" size="5">ID:@broker._1.id </font> <font size="5"> Host:@broker._1.host Port:@broker._1.port</font></li>
+    <ul>
+        @for(partition <- broker._2){
+            <li><span style="align:left">Topic: @partition.topicName.padTo(30, " ")</span><span  align="right"> <font color="red"> Partition id: @partition.id </font></span> </li>
+        }
+    </ul>
+    }
+</ul>
+}
