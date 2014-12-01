@@ -1,0 +1,80 @@
+@(cluster: utils.StormApi.ClusterSummary, supervisors: Seq[utils.StormApi.SupervisorSummary],
+topologies: Seq[utils.StormApi.TopologySummary])(implicit request: play.api.mvc.RequestHeader)
+
+@main("Capillary"){
+<html>
+<head>
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+</head>
+<body>
+    <h2> cluster summary </h2>
+    <table class="table table-bordered">
+        <tr>
+            <th>stormVersion</th>
+            <th>nimbusUptime</th>
+            <th>supervisors</th>
+            <th>slotsTotal</th>
+            <th>slotsUsed</th>
+            <th>slotsFree</th>
+            <th>executorsTotal</th>
+            <th>tasksTotal</th>
+        </tr>
+        <tr>
+            <td>@cluster.stormVersion</td>
+            <td>@cluster.nimbusUptime</td>
+            <td>@cluster.supervisors</td>
+            <td>@cluster.slotsTotal</td>
+            <td>@cluster.slotsUsed</td>
+            <td>@cluster.slotsFree</td>
+            <td>@cluster.executorsTotal</td>
+            <td>@cluster.tasksTotal</td>
+        </tr>
+    </table>
+
+    <h2> supervisor summary</h2>
+    <table class="table table-bordered">
+        <tr>
+            <th>id</th>
+            <th>host</th>
+            <th>uptime</th>
+            <th> slots total</th>
+            <th> slots used</th>
+        </tr>
+        @for(supervisor <- supervisors){
+        <tr>
+            <th>@supervisor.id</th>
+            <th>@supervisor.host</th>
+            <th>@supervisor.uptime</th>
+            <th>@supervisor.slotsTotal</th>
+            <th>@supervisor.slotsUsed</th>
+        </tr>
+        }
+    </table>
+
+    <h2> topology summary</h2>
+    <table class="table table-bordered">
+        <tr>
+            <th>id</th>
+            <th>name</th>
+            <th>status</th>
+            <th>uptime</th>
+            <th>tasks total</th>
+            <th>worker total</th>
+            <th>executors total</th>
+        </tr>
+        @for(topology <- topologies){
+        <tr>
+            <td>@topology.id</td>
+            <td>@topology.name</td>
+            <td>@topology.status</td>
+            <td>@topology.uptime</td>
+            <td>@topology.tasksTotal</td>
+            <td>@topology.workersTotal</td>
+            <td>@topology.executorsTotal</td>
+        </tr>
+        }
+    </table>
+</body>
+</html>
+
+}

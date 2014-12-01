@@ -9,6 +9,7 @@ import play.api.Play
 import play.api.Play.current
 import play.api.libs.json.{JsObject, JsNumber, JsArray, Json}
 import scala.collection.JavaConverters._
+import scala.language.postfixOps
 
 /**
  * Created by xhuang on 11/25/14.
@@ -85,7 +86,9 @@ object KafkaApi {
       }
     }
     val topicStatesFuture = Future.sequence(statesFutures)
-    Await.result(topicStatesFuture, 10 seconds)
+//    Await.result(topicStatesFuture, 10 seconds)
+    //since Actions are asynchronous by default, so this API could block, and play or other users should deal with the blocking
+    Await.result(topicStatesFuture, Duration.Inf)
   }
 
   def getReplicas(topic: String): Set[Replicas] = {
@@ -98,12 +101,12 @@ object KafkaApi {
         Replicas(id, repList)
       }
     }.toSet
-    println(replicas)
+//    println(replicas)
     replicas
   }
 
   /**
-   * get ids of all Kafka brokers
+   * get information of all Kafka brokers
    * 获取Kafka集群的所有broker信息
    * @return
    */

@@ -1,0 +1,11 @@
+@(config: Set[(String, play.api.libs.json.JsValue)])(implicit request: play.api.mvc.RequestHeader)
+
+@main("Capillary") {
+
+<h1>Storm configuration</h1>
+<ul>
+   @for((key, value) <- config){
+      <li>@key : @value</li>
+   }
+</ul>
+}

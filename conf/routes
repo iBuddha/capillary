@@ -6,6 +6,8 @@
 GET     /                           controllers.Application.index
 GET     /metrics                    controllers.Application.metrics
 GET     /brokers                    controllers.Application.brokers
+GET     /storm/summary              controllers.Application.stormSummary
+GET     /storm/config               controllers.Application.stormConfig
 GET     /topo                       controllers.Application.topo(name: String, toporoot: String, topic: String)
 
 GET     /api/status                 controllers.api.Status.current(toporoot: String, topic: String)
