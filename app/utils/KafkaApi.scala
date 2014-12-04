@@ -1,9 +1,11 @@
 package utils
 
+import kafka.admin.AdminUtils
 import kafka.api.{OffsetFetchRequest, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.common.TopicAndPartition
 import kafka.consumer.SimpleConsumer
-import org.apache.curator.framework.CuratorFrameworkFactory
+import org.I0Itec.zkclient.ZkClient
+import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import org.apache.curator.retry.ExponentialBackoffRetry
 import play.api.Play
 import play.api.Play.current
@@ -18,15 +20,15 @@ object KafkaApi {
   val zookeepers = Play.configuration.getString("capillary.zookeepers").getOrElse("localhost:2181")
   val kafkaZkRoot = Play.configuration.getString("capillary.kafka.zkroot")
   val retryPolicy = new ExponentialBackoffRetry(1000, 3)
-  val zkClient = CuratorFrameworkFactory.newClient(zookeepers, retryPolicy);
-  zkClient.start();
+
   val consumers: scala.collection.mutable.Map[String, SimpleConsumer] = scala.collection.mutable.Map.empty[String, SimpleConsumer]
 
   def makePath(parts: Seq[Option[String]]): String = {
     parts.foldLeft("")({ (path, maybeP) => maybeP.map({ p => path + "/" + p}).getOrElse(path)}).replace("//", "/")
   }
 
-  def getKafkaState(topic: String): TopicInfo = {
+    //thread safe
+  def getKafkaState(topic: String)(implicit zkClient: CuratorFramework): TopicInfo = {
     val replicas = getReplicas(topic).map(p => (p.partitionId, p)).toMap
     // Fetch info for each partition, given the topic
     val kParts = zkClient.getChildren.forPath(makePath(Seq(kafkaZkRoot, Some("brokers/topics"), Some(topic), Some("partitions"))))
@@ -61,7 +63,7 @@ object KafkaApi {
           println("ERROR!")
         }
         val offset = response.partitionErrorAndOffsets.get(topicAndPartition).get.offsets(0)
-        ks.close
+//        ks.close
         //        (kp.toInt, offset, host)
         PartitionInfo(topic, kp.toInt, offset, host, replicas.get(kp.toInt).get.replicas, isr, NoIncrement)
       } else
@@ -69,10 +71,10 @@ object KafkaApi {
         PartitionInfo(topic, kp.toInt, -1L, "-1", replicas.get(kp.toInt).get.replicas, List.empty[String], NoIncrement)
     }).toList.sortBy(_.id)
     val totalOffset = partitionInfos.map(_.offset).sum
-    TopicInfo(System.currentTimeMillis(), topic, partitionInfos, totalOffset, NoIncrement, false)
+    TopicInfo(System.currentTimeMillis(), topic, partitionInfos, totalOffset, NoIncrement, false, getTopicConf(topic))
   }
 
-  def getKafkaState(topics: List[String]): List[TopicInfo] = {
+  def getKafkaState(topics: List[String])(implicit zkClient: CuratorFramework): List[TopicInfo] = {
     import scala.concurrent._
     import ExecutionContext.Implicits.global
     import scala.concurrent.duration._
@@ -91,7 +93,7 @@ object KafkaApi {
     Await.result(topicStatesFuture, Duration.Inf)
   }
 
-  def getReplicas(topic: String): Set[Replicas] = {
+  def getReplicas(topic: String)(implicit zkClient: CuratorFramework): Set[Replicas] = {
     val topicInfo = zkClient.getData.forPath(makePath(Seq(kafkaZkRoot, Some("brokers/topics"), Some(topic))))
     val state = (Json.parse(topicInfo) \ "partitions").asInstanceOf[JsObject]
     val replicas = state.fieldSet.map {
@@ -110,7 +112,7 @@ object KafkaApi {
    * 获取Kafka集群的所有broker信息
    * @return
    */
-  def getBrokers(): Set[KafkaBroker] = {
+  def getBrokers()(implicit zkClient: CuratorFramework): Set[KafkaBroker] = {
     val idsPath = makePath(Seq(kafkaZkRoot, Some("brokers/ids")))
     val ids = zkClient.getChildren.forPath(idsPath)
     ids.asScala.map { id =>
@@ -130,7 +132,7 @@ object KafkaApi {
    * get all partitions of a topic into a List instead of a Set, so we can sort it.
    * @param topicInfos
    */
-  def getPartitionDistribution(topicInfos: List[TopicInfo]): Map[KafkaBroker, List[PartitionInfo]] = {
+  def getPartitionDistribution(topicInfos: List[TopicInfo])(implicit zkClient: CuratorFramework): Map[KafkaBroker, List[PartitionInfo]] = {
     val brokers = getBrokers()
     val partitions = topicInfos.flatten(_.partitions)
     val distribution: Map[String, List[PartitionInfo]] = partitions.groupBy(_.leader)
@@ -138,12 +140,19 @@ object KafkaApi {
       (broker, distribution.get(broker.host).getOrElse(List.empty[PartitionInfo]).toList.sortBy(_.topicName))
     }.toMap
   }
+
+  def getTopicConf(topic: String)(implicit zkClient: CuratorFramework): String = {
+    val topicConf= zkClient.getData.forPath(makePath(Seq(kafkaZkRoot, Some("config/topics"), Some(topic))))
+    val config = (Json.parse(topicConf) \ "config")
+    config.toString
+  }
+
 }
 
 case class KafkaBroker(id: Int, jmxPort: Int, timestamp: String, version: Int, host: String, port: Int)
 
 case class TopicInfo(timestamp: Long, topicName: String, partitions: List[PartitionInfo]
-                     , total: Long, increment: Increment, isActive: Boolean)
+                     , total: Long, increment: Increment, isActive: Boolean, conf: String)
 
 case class PartitionInfo(topicName: String, id: Int, offset: Long, leader: String
                          , reps: List[Int]

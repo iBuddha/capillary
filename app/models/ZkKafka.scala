@@ -14,6 +14,8 @@ import utils.{TopicInfo, PartitionInfo, Increment}
 
 object ZkKafka {
 
+  import controllers.Application.zkClient
+
   case class Delta(partition: Int, amount: Option[Long], current: Long, storm: Option[Long])
   case class Topology(name: String, spoutRoot: String, topic: String)
 
@@ -26,9 +28,7 @@ object ZkKafka {
   val stormZkRoot = Play.configuration.getString("capillary.storm.zkroot")
   val isTrident = Play.configuration.getString("capillary.use.trident").getOrElse(false)
 
-  val retryPolicy = new ExponentialBackoffRetry(1000, 3)
-  val zkClient = CuratorFrameworkFactory.newClient(zookeepers, retryPolicy);
-  zkClient.start();
+
   var _topics: Option[Map[String, TopicInfo]] = None //cache topic information
 
   def makePath(parts: Seq[Option[String]]): String = {
@@ -103,7 +103,7 @@ object ZkKafka {
    * @return
    */
   def listTopics : List[TopicInfo] = {
-    val iter = zkClient.getChildren.forPath("/brokers/topics").iterator()
+    val iter = zkClient.getChildren.forPath(kafkaZkRoot.getOrElse("") + "/brokers/topics").iterator()
     var topicList = List.empty[String]
     while(iter.hasNext)
       topicList = iter.next() :: topicList
@@ -140,7 +140,7 @@ object ZkKafka {
           }
           partitionStates = partitionStates.sortBy(_.id)
           topicState = TopicInfo(currentTime, topicInfo.topicName, partitionStates
-            , topicInfo.total, Increment(interval, topicInfo.total - cachedTopic.total), true)
+            , topicInfo.total, Increment(interval, topicInfo.total - cachedTopic.total), true, topicInfo.conf)
         }
       }
       topicStates = topicState :: topicStates

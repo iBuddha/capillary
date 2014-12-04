@@ -22,5 +22,7 @@ libraryDependencies ++= Seq(
   "org.apache.curator" % "curator-framework" % "2.6.0",
   "org.apache.curator" % "curator-recipes" % "2.6.0",
   "org.coursera" % "metrics-datadog" % "0.1.7",
-  "com.ning" % "async-http-client" % "1.7.19"
+  "com.ning" % "async-http-client" % "1.7.19",
+  "org.xerial" % "sqlite-jdbc" % "3.7.2",
+  "javax.mail" % "mail" % "1.4.7"
 )

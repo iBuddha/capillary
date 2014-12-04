@@ -17,54 +17,89 @@ object StormApi {
   case class ClusterSummary(executorsTotal: Int, nimbusUptime: String, slotsFree: Int,
                             slotsTotal: Int, slotsUsed: Int, stormVersion: String,
                             supervisors: Int, tasksTotal: Int)
+
   case class SupervisorSummary(id: String, host: String, uptime: String, slotsTotal: Int,
-                                slotsUsed: Int)
+                               slotsUsed: Int)
 
   case class TopologySummary(id: String, name: String, status: String, uptime: String,
-                              tasksTotal: Int, workersTotal: Int, executorsTotal: Int)
+                             tasksTotal: Int, workersTotal: Int, executorsTotal: Int)
 
   //fake value that contains error message
   def failedClusterSummary(message: String) = ClusterSummary(0, message, 0, 0, 0, "", 0, 0)
+
   def failedSupervisorSummary(message: String) = SupervisorSummary(message, "", "", 0, 0)
+
   def failedTopologySummary(message: String) = TopologySummary(message, "", "", "", 0, 0, 0)
 
-  val timeout = 10L
+  val timeout = 30L
+
+  val stormUI = "http://172.30.25.20:18080"
+
+  /**
+   * open one http client, execute the block, then close the client.
+   * @param block
+   * @tparam T
+   * @return
+   */
+  def oneGetPerConnection[T](block: (AsyncHttpClient) => Try[T]): Try[T] = Try {
+    val httpClient = new AsyncHttpClient();
+    val t = block(httpClient)
+    httpClient.close() //To make sure http client is closed, t.get must be placed after httpClient.closed
+    t.get
+  }
 
   def getConfiguration(): Try[JsValue] = Try {
-    val httpClient = new AsyncHttpClient();
-    val response = getResponseBody("http://172.30.25.20:18080/api/v1/cluster/configuration", httpClient)
-    httpClient.close()
+    oneGetPerConnection(getConfiguration).get
+  }
+
+  def getConfiguration(httpClient: AsyncHttpClient) = Try {
+    val response = getResponseBody(stormUI + "/api/v1/cluster/configuration", httpClient)
     Json.parse(response)
   }
 
   def getClusterSummary(): Try[ClusterSummary] = Try {
-    val httpClient = new AsyncHttpClient();
-//    val f = httpClient.prepareGet("http://172.30.25.20:18080/api/v1/cluster/summary").execute()
-//    val response = f.get(timeout, TimeUnit.SECONDS).getResponseBody
-    val response = getResponseBody("http://172.30.25.20:18080/api/v1/cluster/summary", httpClient)
-    httpClient.close()
+    oneGetPerConnection(getClusterSummary).get
+  }
+
+  def getClusterSummary(httpClient: AsyncHttpClient): Try[ClusterSummary] = Try {
+    val response = getResponseBody(stormUI + "/api/v1/cluster/summary", httpClient)
     Json.parse(response).as[ClusterSummary]
   }
 
   def getSupervisorSummary(): Try[Seq[SupervisorSummary]] = Try {
-    val httpClient = new AsyncHttpClient();
-    val response = getResponseBody("http://172.30.25.20:18080/api/v1/supervisor/summary", httpClient)
-    httpClient.close()
+    oneGetPerConnection(getSupervisorSummary).get
+  }
+
+  def getSupervisorSummary(httpClient: AsyncHttpClient): Try[Seq[SupervisorSummary]] = Try {
+    val response = getResponseBody(stormUI + "/api/v1/supervisor/summary", httpClient)
     (Json.parse(response) \ "supervisors").as[Seq[SupervisorSummary]]
   }
 
   def getTopologySummary(): Try[Seq[TopologySummary]] = Try {
-    val httpClient = new AsyncHttpClient();
-    val response = getResponseBody("http://172.30.25.20:18080/api/v1/topology/summary", httpClient)
-    httpClient.close()
-    println(response)
+    oneGetPerConnection(getTopologySummary).get
+  }
+
+  def getTopologySummary(httpClient: AsyncHttpClient): Try[Seq[TopologySummary]] = Try {
+    val response = getResponseBody(stormUI + "/api/v1/topology/summary", httpClient)
     (Json.parse(response) \ "topologies").as[Seq[TopologySummary]]
+  }
+
+  def getTopologyState(topoId: String): Try[JsValue] = Try {
+    val httpClient = new AsyncHttpClient()
+    val state = getTopologyState(httpClient, topoId)
+    httpClient.close()
+    state.get
+  }
+
+  def getTopologyState(httpClient: AsyncHttpClient, topoId: String): Try[JsValue] = Try {
+    val response = getResponseBody(stormUI + "/api/v1/topology/" + topoId + "", httpClient)
+    Json.parse(response)
   }
 
   def getResponseBody(url: String, httpClient: AsyncHttpClient): String = {
     val f = httpClient.prepareGet(url).execute()
     val response = f.get(timeout, TimeUnit.SECONDS)
-    if(response.getStatusCode != 200)
+    if (response.getStatusCode != 200)
       throw new Exception("http " + response.getStatusCode)
     response.getResponseBody
   }
@@ -98,11 +133,13 @@ object StormApi {
       (JsPath \ "status").read[String] and
       (JsPath \ "uptime").read[String] and
       (JsPath \ "tasksTotal").read[Int] and
-    (JsPath \ "workersTotal").read[Int] and
+      (JsPath \ "workersTotal").read[Int] and
       (JsPath \ "executorsTotal").read[Int]
     )(TopologySummary.apply _)
 
   implicit val topologiesSummary: Reads[Seq[TopologySummary]] = (
     Reads.seq(topologySummary)
     )
+
+
 }

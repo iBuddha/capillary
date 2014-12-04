@@ -1,14 +1,17 @@
 package controllers
 
-import akka.dispatch.sysmsg.Failed
+import akka.actor.Props
 import com.codahale.metrics.json.MetricsModule
-import com.codahale.metrics.{MetricRegistry, SharedMetricRegistries}
 import com.fasterxml.jackson.databind.{ObjectWriter, ObjectMapper}
+import com.ning.http.client.AsyncHttpClient
 import com.yammer.metrics.reporting.DatadogReporter
 import java.io.StringWriter
 import java.util.concurrent.TimeUnit
 import models.Metrics
 import models.ZkKafka
+import models.actors.StormClusterStatesMonitor
+import org.apache.curator.framework.CuratorFrameworkFactory
+import org.apache.curator.retry.ExponentialBackoffRetry
 import play.api.Play.current
 import play.api._
 import play.api.libs.json.{JsObject, Json, JsValue}
@@ -17,6 +20,9 @@ import utils.KafkaApi
 import utils.StormApi
 import scala.language.implicitConversions
 import scala.util.{Try, Success}
+import play.api.libs.concurrent.Akka
+import play.api.libs.concurrent.Execution.Implicits._
+import scala.concurrent.duration._
 
 object Application extends Controller {
 
@@ -28,6 +34,12 @@ object Application extends Controller {
   def durationUnit = Play.configuration.getString("capillary.metrics.durationUnit", validUnits).getOrElse("SECONDS")
   def showSamples  = Play.configuration.getBoolean("capillary.metrics.showSamples").getOrElse(false)
   def ddAPIKey     = Play.configuration.getString("capillary.metrics.datadog.apiKey")
+
+  //CuratorFramework instance is fully thread safe, so initialize it here once, and share it whenever needed
+  val zookeepers = Play.configuration.getString("capillary.zookeepers").getOrElse("localhost:2181")
+  val retryPolicy = new ExponentialBackoffRetry(1000, 3)
+  implicit val zkClient = CuratorFrameworkFactory.newClient(zookeepers, retryPolicy)
+  zkClient.start()
 
   val module = new MetricsModule(rateUnit, durationUnit, showSamples)
   mapper.registerModule(module)
@@ -41,11 +53,18 @@ object Application extends Controller {
     reporter.start(20, TimeUnit.SECONDS)
   })
 
+  val stormClusterMonitor = Akka.system.actorOf(Props[StormClusterStatesMonitor], name = "storm-cluster-monitor")
+  Akka.system.scheduler.schedule(0.microsecond, 1.minute, stormClusterMonitor, StormClusterStatesMonitor.Tik)
+
+
   implicit def stringToTimeUnit(s: String) : TimeUnit = TimeUnit.valueOf(s)
 
   def index = Action { implicit request =>
 
-    val topos = ZkKafka.getTopologies
+    val allAliveTopos = StormApi.getTopologySummary().get //get all topologies, whatever using Kafka Spout
+    val kafkaTopos = ZkKafka.getTopologies
+    val topoStates = allAliveTopos.map(t => (t.name, t.status)).toMap
+    val topoAndStates = kafkaTopos.filter(t => topoStates.contains(t.name)).map(t => (t, topoStates.get(t.name).get)).toMap
 
     var topics = ZkKafka.listTopics
     topics = topics.sortWith{
@@ -59,7 +78,7 @@ object Application extends Controller {
       }
     }
 
-    Ok(views.html.index(topos, topics))
+    Ok(views.html.index(topoAndStates, kafkaTopos, topics))
   }
 
   def brokers = Action { implicit requst =>
@@ -92,9 +111,11 @@ object Application extends Controller {
     }.get
   }
   def stormSummary = Action { implicit request =>
-    val cluster = StormApi.getClusterSummary()
-    val supervisor = StormApi.getSupervisorSummary()
-    val topologies = StormApi.getTopologySummary()
+    val httpClient = new AsyncHttpClient()
+    val cluster = StormApi.getClusterSummary(httpClient)
+    val supervisor = StormApi.getSupervisorSummary(httpClient)
+    val topologies = StormApi.getTopologySummary(httpClient)
+    httpClient.close()
 //    (for {
 //        c <- cluster
 //        s <- supervisor
