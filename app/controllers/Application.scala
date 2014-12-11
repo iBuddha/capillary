@@ -9,7 +9,7 @@ import java.io.StringWriter
 import java.util.concurrent.TimeUnit
 import models.Metrics
 import models.ZkKafka
-import models.actors.StormClusterStatesMonitor
+import models.actors.{CurrentTopologiesReader, StormClusterStatesMonitor}
 import org.apache.curator.framework.CuratorFrameworkFactory
 import org.apache.curator.retry.ExponentialBackoffRetry
 import play.api.Play.current
@@ -54,7 +54,9 @@ object Application extends Controller {
   })
 
   val stormClusterMonitor = Akka.system.actorOf(Props[StormClusterStatesMonitor], name = "storm-cluster-monitor")
-  Akka.system.scheduler.schedule(0.microsecond, 1.minute, stormClusterMonitor, StormClusterStatesMonitor.Tik)
+  val topoReader = Akka.system.actorOf(Props[CurrentTopologiesReader], "topology-reader")
+  Akka.system.scheduler.schedule(0.microsecond, 30.seconds, stormClusterMonitor, StormClusterStatesMonitor.Tik)
+//  Akka.system.scheduler.schedule(0.microsecond, 10.seconds, topoReader, CurrentTopologiesReader.Tik)
 
 
   implicit def stringToTimeUnit(s: String) : TimeUnit = TimeUnit.valueOf(s)
@@ -79,6 +81,10 @@ object Application extends Controller {
     }
 
     Ok(views.html.index(topoAndStates, kafkaTopos, topics))
+  }
+
+  def d3 = Action{implicit  request =>
+    Ok(views.html.d3())
   }
 
   def brokers = Action { implicit requst =>

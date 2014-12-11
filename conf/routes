@@ -3,6 +3,7 @@
 # ~~~~
 
 # Home page
+GET     /d3                         controllers.Application.d3
 GET     /                           controllers.Application.index
 GET     /metrics                    controllers.Application.metrics
 GET     /brokers                    controllers.Application.brokers

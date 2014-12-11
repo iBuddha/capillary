@@ -4,8 +4,10 @@ import java.sql.Timestamp
 
 import akka.actor.{Props, Actor}
 import models.actors.EmailSender.{Failed, Email}
+import play.api.Play
 import utils.StormApi
 import utils.StormApi.{SupervisorSummary, TopologySummary, ClusterSummary}
+import play.api.Play.current
 
 /**
  * Created by xhuang on 12/3/14.
@@ -63,6 +65,7 @@ class StormClusterStatesMonitor extends Actor {
         case Some(lastState) => {
           val stateChange = compareTopoState(t, lastState)
           if (stateChange.isDefined) {
+//            println("topology state changed")
             val emailReceivers = getEmailReceivers
             if (!emailReceivers.isEmpty)
               emailSender ! EmailSender.Email(System.currentTimeMillis(),
@@ -87,6 +90,7 @@ class StormClusterStatesMonitor extends Actor {
 }
 
 object StormClusterStatesMonitor {
+  def receiverPath = Play.configuration.getString("capillary.email.receivers.path").getOrElse("/capillary/email-receivers")
 
   case object Tik
 
@@ -108,7 +112,7 @@ object StormClusterStatesMonitor {
 
   def compareSupervisorState(cur: Seq[SupervisorSummary], last: Seq[SupervisorSummary]): Option[String] = {
     val curHosts = cur.map(s => (s.id, s.host)).toSet
-    val lastHosts = cur.map(s => (s.id, s.host)).toSet
+    val lastHosts = last.map(s => (s.id, s.host)).toSet
     val in = curHosts -- lastHosts
     val out = lastHosts -- curHosts
     var stateChange = ""
@@ -207,7 +211,7 @@ object StormClusterStatesMonitor {
 
   def getEmailReceivers: List[String] = {
     import controllers.Application.zkClient
-    val emailReceivers = new String(zkClient.getData.forPath("/capillary/email-receivers"))
+    val emailReceivers = new String(zkClient.getData.forPath(receiverPath))
     emailReceivers.split(",").map(_.trim).toList
   }
 }

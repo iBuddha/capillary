@@ -3,11 +3,13 @@ package utils
 import java.util.concurrent.TimeUnit
 
 import com.ning.http.client.AsyncHttpClient
+import play.api.Play
 import play.api.libs.json._
 import play.api.libs.json.Reads._
 import play.api.libs.functional.syntax._
 
 import scala.util.Try
+import play.api.Play.current
 
 /**
  * Created by xhuang on 11/28/14.
@@ -33,8 +35,8 @@ object StormApi {
 
   val timeout = 30L
 
-  val stormUI = "http://172.30.25.20:18080"
-
+//  val stormUI = "http://172.30.25.20:18080"
+val stormUI = Play.configuration.getString("capillary.storm.ui.url").getOrElse("http://localhost:18080")
   /**
    * open one http client, execute the block, then close the client.
    * @param block
