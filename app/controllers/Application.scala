@@ -9,7 +9,7 @@ import java.io.StringWriter
 import java.util.concurrent.TimeUnit
 import models.Metrics
 import models.ZkKafka
-import models.actors.{CurrentTopologiesReader, StormClusterStatesMonitor}
+import models.actors.{TopoQueue, CurrentTopologiesReader, StormClusterStatesMonitor}
 import org.apache.curator.framework.CuratorFrameworkFactory
 import org.apache.curator.retry.ExponentialBackoffRetry
 import play.api.Play.current
@@ -18,11 +18,14 @@ import play.api.libs.json.{JsObject, Json, JsValue}
 import play.api.mvc._
 import utils.KafkaApi
 import utils.StormApi
+import scala.concurrent.{Future, Await}
 import scala.language.implicitConversions
-import scala.util.{Try, Success}
+import scala.util.{Try, Success, Failure}
 import play.api.libs.concurrent.Akka
 import play.api.libs.concurrent.Execution.Implicits._
 import scala.concurrent.duration._
+import akka.pattern.Patterns.ask
+import scala.language.postfixOps
 
 object Application extends Controller {
 
@@ -55,9 +58,10 @@ object Application extends Controller {
 
   val stormClusterMonitor = Akka.system.actorOf(Props[StormClusterStatesMonitor], name = "storm-cluster-monitor")
   val topoReader = Akka.system.actorOf(Props[CurrentTopologiesReader], "topology-reader")
-  Akka.system.scheduler.schedule(0.microsecond, 30.seconds, stormClusterMonitor, StormClusterStatesMonitor.Tik)
-//  Akka.system.scheduler.schedule(0.microsecond, 10.seconds, topoReader, CurrentTopologiesReader.Tik)
-
+  val topologyCheckInterval = Play.configuration.getInt("capillary.monitors.topology.checkInterval.seconds").getOrElse(30)
+  val clusterCheckInterval = Play.configuration.getInt("capillary.monitors.cluster.checkInterval.seconds").getOrElse(10)
+  Akka.system.scheduler.schedule(0.microsecond, clusterCheckInterval.seconds, stormClusterMonitor, StormClusterStatesMonitor.Tik)
+  Akka.system.scheduler.schedule(0.microsecond, topologyCheckInterval.seconds, topoReader, CurrentTopologiesReader.Tik)
 
   implicit def stringToTimeUnit(s: String) : TimeUnit = TimeUnit.valueOf(s)
 
@@ -93,11 +97,20 @@ object Application extends Controller {
     Ok(views.html.brokers(brokers))
   }
 
-  def topo(name: String, topoRoot: String, topic: String) = Action { implicit request =>
+  def topo(name: String, topoRoot: String, topic: String) = Action.async { implicit request =>
 
     val totalAndDeltas = ZkKafka.getTopologyDeltas(topoRoot, topic)
-
-    Ok(views.html.topology(name, topic, totalAndDeltas._1, totalAndDeltas._2.toSeq))
+    val incrFuture = ask(topoReader, CurrentTopologiesReader.OffsetIncr(name), 3 seconds)
+    val incr: Future[Option[TopoQueue.Increment]]= incrFuture.map{
+      case r: TopoQueue.Increment => Some(r)
+      case _ => None
+    }
+    val timeoutFuture = play.api.libs.concurrent.Promise.timeout("Oops", 5.second)
+    Future.firstCompletedOf(Seq(incr, timeoutFuture)).map {
+      case i: Option[TopoQueue.Increment]=> Ok(views.html.topology(name, topic, totalAndDeltas._1, totalAndDeltas._2.toSeq, i))
+//      case t: String => InternalServerError(t)
+    }
+//    Ok(views.html.topology(name, topic, totalAndDeltas._1, totalAndDeltas._2.toSeq, incr))
   }
 
   def metrics = Action {

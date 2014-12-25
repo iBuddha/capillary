@@ -2,7 +2,7 @@ package models.actors
 
 import java.sql.Timestamp
 
-import akka.actor.{Props, Actor}
+import akka.actor.{ActorLogging, Props, Actor}
 import models.actors.EmailSender.{Failed, Email}
 import play.api.Play
 import utils.StormApi
@@ -12,11 +12,11 @@ import play.api.Play.current
 /**
  * Created by xhuang on 12/3/14.
  */
-class StormClusterStatesMonitor extends Actor {
+class StormClusterStatesMonitor extends Actor{
 
   import StormClusterStatesMonitor._
 
-  val emailSender = context.actorOf(Props[EmailSender])
+  val emailSender = context.actorOf(Props[EmailSender], "emailSender")
   var lastClusterState: Option[ClusterState] = None
   var lastTopologiesState: Option[Seq[TopologySummary]] = None
   var failedEmails: List[Email] = List.empty[Email]
@@ -83,6 +83,8 @@ class StormClusterStatesMonitor extends Actor {
   def resendEmails = {
     count += 1
     if (count % 10 == 0) {
+      if(failedEmails.size > 100)
+        failedEmails = failedEmails.sortBy(_.time).takeRight(100) // only keep last 100 emails
       failedEmails.sortBy(_.time).foreach(emailSender ! _) // sort to make sure earlier email be sent first
       failedEmails = List.empty[Email]
     }
@@ -212,6 +214,7 @@ object StormClusterStatesMonitor {
   def getEmailReceivers: List[String] = {
     import controllers.Application.zkClient
     val emailReceivers = new String(zkClient.getData.forPath(receiverPath))
+//    println("email receivers is " + emailReceivers)
     emailReceivers.split(",").map(_.trim).toList
   }
 }

@@ -1,5 +1,8 @@
-@(name: String, topic: String, total: Long, deltas: Seq[models.ZkKafka.Delta])(implicit request: play.api.mvc.RequestHeader)
+@(name: String, topic: String, total: Long, deltas: Seq[models.ZkKafka.Delta], incr: Option[models.actors.TopoQueue.Increment])(implicit request: play.api.mvc.RequestHeader)
 
+        @getTimestampStr(timestamp: Long) = {
+            @{new java.sql.Timestamp(timestamp).toString}
+        }
 @main("Capillary") {
 
   <h1>Deltas for topology "@name" <small> topic: @topic</small></h1>
@@ -35,4 +38,15 @@
       </tr>
     </tfoot>
    </table>
+        @if(incr.isDefined){
+            <ul>
+            <li>From [@getTimestampStr(incr.get.startTime)] with delta [@incr.get.initDelta]</li>
+            <li>To &nbsp;&nbsp;[@getTimestampStr(incr.get.endTime)] with delta [@incr.get.finalDelta]</li>
+            <li>Max delta is [@incr.get.maxDelta] </li>
+            <li>Average delta is [@incr.get.averageDelta]</li>
+            <li>Init Kafka offset is [@incr.get.initKafkaOffset] </li>
+            <li>Final Kafka offset is [@incr.get.finalKafkaOffset] </li>
+            <li> Kafka offset increment speed is [@incr.get.kafkaIncSpeed messages/second]</li>
+            </ul>
+        }else{"no data"}
 }
