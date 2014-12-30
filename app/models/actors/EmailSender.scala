@@ -63,9 +63,8 @@ object EmailSender{
 
     val transport = session.getTransport();
     transport.connect(emailUserName, emailUserPasswd)
-//    transport.sendMessage(msg, ("xhuang@travelsky.com" :: email.receivers).map(new InternetAddress(_)).toArray)
-//    transport.sendMessage(msg, (List("xhuang@travelsky.com")).map(new InternetAddress(_)).toArray)
-    println("send a email")
+    transport.sendMessage(msg,  email.receivers.map(new InternetAddress(_)).toArray)
+//    println("send a email")
     transport.close
   }
 }

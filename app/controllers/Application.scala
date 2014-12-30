@@ -88,7 +88,19 @@ object Application extends Controller {
   }
 
   def d3 = Action{implicit  request =>
-    Ok(views.html.d3())
+    Ok(views.html.d3(
+      """
+        [
+        {"date" : "12-11:10", "close":98200001},
+        {"date" : "12-12:11", "close":98200002},
+        {"date" : "12-13:12", "close":98200005},
+        {"date" : "12-14:13", "close":98200006},
+        {"date" : "12-15:15", "close":98200011},
+        {"date" : "12-16:16", "close":98200022},
+        {"date" : "12-17:17", "close":98200035},
+       {"date" : "12-18:18", "close":98200046}
+        ]
+      """))
   }
 
   def brokers = Action { implicit requst =>
@@ -100,12 +112,12 @@ object Application extends Controller {
   def topo(name: String, topoRoot: String, topic: String) = Action.async { implicit request =>
 
     val totalAndDeltas = ZkKafka.getTopologyDeltas(topoRoot, topic)
-    val incrFuture = ask(topoReader, CurrentTopologiesReader.OffsetIncr(name), 3 seconds)
+    val incrFuture = ask(topoReader, CurrentTopologiesReader.OffsetIncr(name), 20 seconds)
     val incr: Future[Option[TopoQueue.Increment]]= incrFuture.map{
       case r: TopoQueue.Increment => Some(r)
       case _ => None
     }
-    val timeoutFuture = play.api.libs.concurrent.Promise.timeout("Oops", 5.second)
+    val timeoutFuture = play.api.libs.concurrent.Promise.timeout("Oops", 20.second)
     Future.firstCompletedOf(Seq(incr, timeoutFuture)).map {
       case i: Option[TopoQueue.Increment]=> Ok(views.html.topology(name, topic, totalAndDeltas._1, totalAndDeltas._2.toSeq, i))
 //      case t: String => InternalServerError(t)

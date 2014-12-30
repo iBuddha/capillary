@@ -1,52 +1,156 @@
 @(name: String, topic: String, total: Long, deltas: Seq[models.ZkKafka.Delta], incr: Option[models.actors.TopoQueue.Increment])(implicit request: play.api.mvc.RequestHeader)
 
-        @getTimestampStr(timestamp: Long) = {
-            @{new java.sql.Timestamp(timestamp).toString}
-        }
+@getTimestampStr(timestamp: Long) = {
+@{new java.sql.Timestamp(timestamp).toString}
+}
 @main("Capillary") {
 
-  <h1>Deltas for topology "@name" <small> topic: @topic</small></h1>
-  <table class="table table-striped table-bordered table-hover">
-   <thead>
+<h1>Deltas for topology "@name"
+    <small> topic: @topic</small>
+</h1>
+<table class="table table-striped table-bordered table-hover">
+    <thead>
     <th>Partition</th>
     <th>Delta (Messages)</th>
     <th>Kafka Current</th>
     <th>Spout Current</th>
-   </thead>
+    </thead>
     <tbody>
-      <tr class="info">
-       <td>All</td>
-       <td>Total: @total</th>
-       <td>&nbsp;</th>
-       <td>&nbsp;</th>
-      </tr>
-      @for(delta <- deltas) {
-      <tr>
-       <td>@delta.partition</td>
-       <td>@delta.amount</th>
-       <td>@delta.current</th>
-       <td>@delta.storm</th>
-      </tr>
-      }
+    <tr class="info">
+        <td>All</td>
+        <td>Total: @total
+        </th>
+        <td>&nbsp;
+        </th>
+        <td>&nbsp;
+        </th>
+    </tr>
+    @for(delta <- deltas) {
+    <tr>
+        <td>@delta.partition</td>
+        <td>@delta.amount
+        </th>
+        <td>@delta.current
+        </th>
+        <td>@delta.storm
+        </th>
+    </tr>
+    }
     </tbody>
     <tfoot>
-      <tr class="info">
-       <td>All</td>
-       <td>Total: @total</th>
-       <td>&nbsp;</th>
-       <td>&nbsp;</th>
-      </tr>
+    <tr class="info">
+        <td>All</td>
+        <td>Total: @total
+        </th>
+        <td>&nbsp;
+        </th>
+        <td>&nbsp;
+        </th>
+    </tr>
     </tfoot>
-   </table>
-        @if(incr.isDefined){
-            <ul>
-            <li>From [@getTimestampStr(incr.get.startTime)] with delta [@incr.get.initDelta]</li>
-            <li>To &nbsp;&nbsp;[@getTimestampStr(incr.get.endTime)] with delta [@incr.get.finalDelta]</li>
-            <li>Max delta is [@incr.get.maxDelta] </li>
-            <li>Average delta is [@incr.get.averageDelta]</li>
-            <li>Init Kafka offset is [@incr.get.initKafkaOffset] </li>
-            <li>Final Kafka offset is [@incr.get.finalKafkaOffset] </li>
-            <li> Kafka offset increment speed is [@incr.get.kafkaIncSpeed messages/second]</li>
-            </ul>
-        }else{"no data"}
+</table>
+@if(incr.isDefined){
+<ul>
+    <li>From [@getTimestampStr(incr.get.startTime)] with delta [@incr.get.initDelta]</li>
+    <li>To &nbsp;&nbsp;[@getTimestampStr(incr.get.endTime)] with delta [<font color="red">@incr.get.finalDelta</font>]</li>
+    <li>Max delta is [@incr.get.maxDelta]</li>
+    <li>Average delta is [@incr.get.averageDelta]</li>
+    <li>Init Kafka offset is [@incr.get.initKafkaOffset]</li>
+    <li>Final Kafka offset is [@incr.get.finalKafkaOffset]</li>
+    <li> Kafka offset increment speed is [@incr.get.kafkaIncSpeed messages/second]</li>
+    @for(kafkaIncrPerHour <- incr.get.kafkaIncrPerHour){
+        <li>@kafkaIncrPerHour</li>
+    }
+</ul>
+<style>
+
+    body {
+    font: 14px sans-serif;
+    }
+
+    .axis path,
+    .axis line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+    }
+
+    .area {
+    fill: steelblue;
+    }
+
+</style>
+<script type="text/javascript" src='@routes.Assets.at("javascript/d3.js")'></script>
+<script type="text/javascript">
+
+var dataJSON = @Html(incr.get.historyJSON.toString)
+
+var a = 1;
+var margin = {top: 100, right: 100, bottom: 50, left: 200},
+    width = 1400 - margin.left - margin.right,
+    height = 600 - margin.top - margin.bottom;
+
+var parseDate = d3.time.format("%d-%H:%M").parse;
+
+var x = d3.time.scale()
+    .range([0, width]);
+
+var y = d3.scale.linear()
+    .range([height, 0]);
+
+var xAxis = d3.svg.axis()
+    .scale(x)
+    .orient("bottom")
+    .tickFormat(d3.time.format("%Hh%M"));
+
+var yAxis = d3.svg.axis()
+    .scale(y)
+    .orient("left");
+
+var area = d3.svg.area()
+    .x(function(d) { return x(d.date); })
+    .y0(height)
+    .y1(function(d) { return y(d.close); });
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+d3.tsv("data.tsv", function(error, data) {
+  data = dataJSON
+  data.forEach(function(d) {
+    d.date = parseDate(d.date);
+    d.close = +d.close;
+  });
+
+  x.domain(d3.extent(data, function(d) { return d.date; }));
+  y.domain([d3.min(data, function(d) { return d.close; }), d3.max(data, function(d) { return d.close; })]);
+
+  svg.append("path")
+      .datum(data)
+      .attr("class", "area")
+      .attr("d", area);
+
+  svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis);
+
+  svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+    .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+      .text("Delta");
+});
+
+
+</script>
+}else{"no data"}
 }
