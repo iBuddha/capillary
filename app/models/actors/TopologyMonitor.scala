@@ -222,8 +222,8 @@ object TopoQueue {
     builder.toString
   }
 
-  private val dayHourFormat = new SimpleDateFormat("dd-HH")
   def getKafkaIncrPerHour(history: List[OffsetAndTime]) = {
+     val dayHourFormat = new SimpleDateFormat("dd-HH")
     //tag each OffsetAndTime with a date string which contains day and hour
     val tagedHistory = history.map{e => (dayHourFormat.format(new Date(e.time)), e)}
     val groupedByHour = tagedHistory.groupBy(e => e._1)
@@ -239,7 +239,7 @@ object TopoQueue {
         val incrStr = s"from [$initTime] to [$lastTime], kafka offset increasing speed is [$speed] messages/second"
         timeAndStr = (hourHistory.head.time, incrStr) :: timeAndStr
       }
-      timeAndStr.sortBy{e => e.1}.map{e => e._2}
+      timeAndStr.sortBy{e => e._1}.map{e => e._2}
     }else
       List.empty[String]
   }
