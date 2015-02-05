@@ -4,7 +4,13 @@ an API for fetching this information for monitoring purposes.
 
 # Overview
 
-![Capillary](/shot.png?raw=true)
+![delta](/shot.png?raw=true)
+
+![topics](/topics.jpg?raw=true)
+
+![delta_change](/delta_change.jpg?raw=true)
+
+![statistic](/statistic.png?raw=true)
 
 Capillary does the following:
 * Fetches information about running topologies from Zookeeper
