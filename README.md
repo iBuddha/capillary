@@ -3,23 +3,32 @@ deltas of Kafka-based storm topologies with a Kafka >= 0.8. It also provides
 an API for fetching this information for monitoring purposes.
 
 # Overview
+delta
 
 ![delta](/shot.png?raw=true)
 
+topics
+
 ![topics](/topics.jpg?raw=true)
 
+delta history
+
 ![delta_change](/delta_change.jpg?raw=true)
+
+statistics of offset
 
 ![statistic](/statistic.png?raw=true)
 
 Capillary does the following:
 * Fetches information about running topologies from Zookeeper
 * Fetches information about the topic's partitions and offsets from the Storm spout state in Zookeeper
-* Fetches information about the partition's leaders from Zookeeper
-* Fetches information from Kafka about the latest offset from the partitions leaders
 * Fetches all topics of kafka cluster
 * Fetches offset, ISR, replicas, leader, offset increment for each partition exists in Kafka
 * Fetches partition leader distribution of Kafka cluster
+* Show Storm cluster summary
+* Show Storm configuration
+* Show delta change history
+
 
 # API
 
