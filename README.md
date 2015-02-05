@@ -19,7 +19,7 @@ an API for fetching this information for monitoring purposes.
 
 ![statistic](/statistic.png?raw=true)
 
-Capillary does the following:
+# Capillary does the following:
 * Fetches information about running topologies from Zookeeper
 * Fetches information about the topic's partitions and offsets from the Storm spout state in Zookeeper
 * Fetches all topics of kafka cluster
