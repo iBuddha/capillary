@@ -3,19 +3,19 @@ deltas of Kafka-based storm topologies with a Kafka >= 0.8. It also provides
 an API for fetching this information for monitoring purposes.
 
 # Overview
-delta
+### delta
 
 ![delta](/shot.png?raw=true)
 
-topics
+### topics
 
 ![topics](/topics.jpg?raw=true)
 
-delta history
+### delta history
 
 ![delta_change](/delta_change.jpg?raw=true)
 
-statistics of offset
+### statistics of offset
 
 ![statistic](/statistic.png?raw=true)
 
